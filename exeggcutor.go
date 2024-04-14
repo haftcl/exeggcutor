@@ -1,6 +1,7 @@
 package exeggcutor
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -12,12 +13,12 @@ import (
 
 // Runner is an interface that defines the methods to execute a job
 type Runner interface {
-	Execute() error
+	Execute(context.Context) error
 }
 
 // Hydrator is an interface that defines the methods to obtain the jobs
 type Hydrator interface {
-	Get() ([]Runner, error)
+	Get(context.Context) ([]Runner, error)
 }
 
 type executor struct {
@@ -30,7 +31,10 @@ type executor struct {
 
 func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int) *executor {
 	if logger == nil {
-		logger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+		logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))
+		logger = logger.With("app", "exeggcutor")
 	}
 
 	return &executor{
@@ -42,28 +46,30 @@ func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int
 	}
 }
 
-func (e *executor) runTasks() error {
-	runners, err := e.hydrator.Get()
+func (e *executor) runTasks(ctx context.Context) error {
+	runners, err := e.hydrator.Get(ctx)
 
 	if err != nil {
 		e.log.Error("Error getting runners: ", err)
 		return err
 	}
 
-	var group errgroup.Group
+	group, ctx := errgroup.WithContext(ctx)
 	group.SetLimit(e.numWorkers)
 	e.log.Info("Running new Tasks", slog.Int("num_tasks", len(runners)))
 
 	for _, runner := range runners {
 		runner := runner
 		group.Go(func() error {
-			run_error := runner.Execute()
+			e.log.Debug("Executing runner", slog.Any("runner", runner))
+			run_error := runner.Execute(ctx)
 
 			if run_error != nil {
-				e.log.Error("Error executing runner: ", run_error)
+				e.log.Error("Error executing runner", "error", run_error)
 				return run_error
 			}
 
+			e.log.Debug("Runner executed", slog.Any("runner", runner))
 			return nil
 		})
 	}
@@ -78,7 +84,7 @@ func (e *executor) runTasks() error {
 
 var signalChan = make(chan os.Signal, 1)
 
-func (e *executor) Start() {
+func (e *executor) Start(ctx context.Context) {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	for {
@@ -87,7 +93,7 @@ func (e *executor) Start() {
 			e.log.Info("Received signal to stop")
 			return
 		default:
-			err := e.runTasks()
+			err := e.runTasks(ctx)
 
 			if err != nil && e.ExitOnError {
 				e.log.Info("Exiting due to error")
