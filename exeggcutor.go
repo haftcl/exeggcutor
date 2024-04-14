@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Runner is an interface that defines the methods to execute a job
@@ -26,7 +28,7 @@ type executor struct {
 	log         *slog.Logger
 }
 
-func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger) *executor {
+func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int) *executor {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	}
@@ -36,6 +38,7 @@ func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger) *executor {
 		timeOutInMs: timeOutInMs,
 		ExitOnError: false,
 		log:         logger,
+		numWorkers:  numWorkers,
 	}
 }
 
@@ -47,16 +50,26 @@ func (e *executor) runTasks() error {
 		return err
 	}
 
+	var group errgroup.Group
+	group.SetLimit(e.numWorkers)
+	e.log.Info("Running new Tasks", slog.Int("num_tasks", len(runners)))
+
 	for _, runner := range runners {
-		run_error := runner.Execute()
+		runner := runner
+		group.Go(func() error {
+			run_error := runner.Execute()
 
-		if run_error != nil {
-			e.log.Error("Error executing runner: ", run_error)
-
-			if e.ExitOnError {
+			if run_error != nil {
+				e.log.Error("Error executing runner: ", run_error)
 				return run_error
 			}
-		}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil && e.ExitOnError {
+		return err
 	}
 
 	time.Sleep(time.Duration(e.timeOutInMs) * time.Millisecond)
