@@ -56,7 +56,7 @@ func (e *executor) runTasks(ctx context.Context) error {
 
 	group, ctx := errgroup.WithContext(ctx)
 	group.SetLimit(e.numWorkers)
-	e.log.Info("Running new Tasks", slog.Int("num_tasks", len(runners)))
+	e.log.Debug("Running new tasks cycle", slog.Int("num_tasks", len(runners)))
 
 	for _, runner := range runners {
 		runner := runner
@@ -74,11 +74,15 @@ func (e *executor) runTasks(ctx context.Context) error {
 		})
 	}
 
-	if err := group.Wait(); err != nil && e.ExitOnError {
+	err = group.Wait();
+	if  err != nil && e.ExitOnError {
+		e.log.Debug("Tasks returned error, closing executor", slog.Any("error", err))
 		return err
 	}
 
+	e.log.Debug("Finishing tasks cycle", slog.Int("num_tasks", len(runners)), slog.Any("error", err))
 	time.Sleep(time.Duration(e.timeOutInMs) * time.Millisecond)
+
 	return nil
 }
 
@@ -86,6 +90,7 @@ var signalChan = make(chan os.Signal, 1)
 
 func (e *executor) Start(ctx context.Context) {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	e.log.Info("Starting new executor")
 
 	for {
 		select {
@@ -96,7 +101,7 @@ func (e *executor) Start(ctx context.Context) {
 			err := e.runTasks(ctx)
 
 			if err != nil && e.ExitOnError {
-				e.log.Info("Exiting due to error")
+				e.log.Debug("Exiting due to error")
 				return
 			}
 		}
