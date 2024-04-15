@@ -27,7 +27,6 @@ type RunnerImpl struct {
 // Implement the interfaces
 func (r *RunnerImpl) Execute(ctx context.Context) error {
     time.Sleep(time.Duration(100) * time.Millisecond)
-    x++
     return nil
 }
 
