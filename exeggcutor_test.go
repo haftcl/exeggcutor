@@ -153,7 +153,7 @@ type HydratorCancelledImpl struct {
 }
 
 type RunnerCancelledImpl struct {
-	Id int
+	ID int
 }
 
 func (r *RunnerCancelledImpl) Execute(ctx context.Context) error {
@@ -176,16 +176,16 @@ func (r *RunnerCancelledImpl) Execute(ctx context.Context) error {
 func (h *HydratorCancelledImpl) Get(ctx context.Context) ([]Runner, error) {
 	runners := make([]Runner, 0)
 
-	runners = append(runners, &RunnerCancelledImpl{Id: 1})
-	runners = append(runners, &RunnerCancelledImpl{Id: 2})
-	runners = append(runners, &RunnerCancelledImpl{Id: 3})
-	runners = append(runners, &RunnerCancelledImpl{Id: 4})
-	runners = append(runners, &RunnerCancelledImpl{Id: 5})
-	runners = append(runners, &RunnerCancelledImpl{Id: 6})
-	runners = append(runners, &RunnerCancelledImpl{Id: 7})
-	runners = append(runners, &RunnerCancelledImpl{Id: 8})
-	runners = append(runners, &RunnerCancelledImpl{Id: 9})
-	runners = append(runners, &RunnerCancelledImpl{Id: 10})
+	runners = append(runners, &RunnerCancelledImpl{ID: 1})
+	runners = append(runners, &RunnerCancelledImpl{ID: 2})
+	runners = append(runners, &RunnerCancelledImpl{ID: 3})
+	runners = append(runners, &RunnerCancelledImpl{ID: 4})
+	runners = append(runners, &RunnerCancelledImpl{ID: 5})
+	runners = append(runners, &RunnerCancelledImpl{ID: 6})
+	runners = append(runners, &RunnerCancelledImpl{ID: 7})
+	runners = append(runners, &RunnerCancelledImpl{ID: 8})
+	runners = append(runners, &RunnerCancelledImpl{ID: 9})
+	runners = append(runners, &RunnerCancelledImpl{ID: 10})
 
 	return runners, nil
 }

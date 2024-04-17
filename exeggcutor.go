@@ -21,6 +21,7 @@ type Hydrator interface {
 	Get(context.Context) ([]Runner, error)
 }
 
+// Executor is the main struct that will execute the hydration and running of the jobs.
 type Executor struct {
 	hydrator    Hydrator
 	numWorkers  int
@@ -29,6 +30,7 @@ type Executor struct {
 	ExitOnError bool
 }
 
+// New creates a new Executor instance thats ready to use.
 func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int) *Executor {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
@@ -88,6 +90,7 @@ func (e *Executor) runTasks(ctx context.Context) error {
 
 var signalChan = make(chan os.Signal, 1)
 
+// Start the executions of the tasks
 func (e *Executor) Start(ctx context.Context) {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	e.log.Info("Starting new executor")
