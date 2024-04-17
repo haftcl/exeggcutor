@@ -21,15 +21,15 @@ type Hydrator interface {
 	Get(context.Context) ([]Runner, error)
 }
 
-type executor struct {
+type Executor struct {
 	hydrator    Hydrator
 	numWorkers  int
 	timeOutInMs int
-	ExitOnError bool
 	log         *slog.Logger
+	ExitOnError bool
 }
 
-func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int) *executor {
+func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int) *Executor {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
@@ -37,16 +37,16 @@ func New(hydrator Hydrator, timeOutInMs int, logger *slog.Logger, numWorkers int
 		logger = logger.With("app", "exeggcutor")
 	}
 
-	return &executor{
+	return &Executor{
 		hydrator:    hydrator,
 		timeOutInMs: timeOutInMs,
 		ExitOnError: false,
-		log:         logger,
 		numWorkers:  numWorkers,
+		log:         logger,
 	}
 }
 
-func (e *executor) runTasks(ctx context.Context) error {
+func (e *Executor) runTasks(ctx context.Context) error {
 	runners, err := e.hydrator.Get(ctx)
 
 	if err != nil {
@@ -62,11 +62,11 @@ func (e *executor) runTasks(ctx context.Context) error {
 		runner := runner
 		group.Go(func() error {
 			e.log.Debug("Executing runner", slog.Any("runner", runner))
-			run_error := runner.Execute(ctx)
+			runError := runner.Execute(ctx)
 
-			if run_error != nil {
-				e.log.Error("Error executing runner", "error", run_error)
-				return run_error
+			if runError != nil {
+				e.log.Error("Error executing runner", "error", runError)
+				return runError
 			}
 
 			e.log.Debug("Runner executed", slog.Any("runner", runner))
@@ -74,8 +74,8 @@ func (e *executor) runTasks(ctx context.Context) error {
 		})
 	}
 
-	err = group.Wait();
-	if  err != nil && e.ExitOnError {
+	err = group.Wait()
+	if err != nil && e.ExitOnError {
 		e.log.Debug("Tasks returned error, closing executor", slog.Any("error", err))
 		return err
 	}
@@ -88,7 +88,7 @@ func (e *executor) runTasks(ctx context.Context) error {
 
 var signalChan = make(chan os.Signal, 1)
 
-func (e *executor) Start(ctx context.Context) {
+func (e *Executor) Start(ctx context.Context) {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	e.log.Info("Starting new executor")
 

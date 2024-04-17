@@ -4,17 +4,41 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
 
-var x = 0
+type safeCounter struct {
+	mu      sync.Mutex
+	counter int
+}
+
+func (c *safeCounter) Inc() {
+	c.mu.Lock()
+	c.counter++
+	c.mu.Unlock()
+}
+
+func (c *safeCounter) Count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.counter
+}
+
+func (c *safeCounter) Reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.counter = 0
+}
+
+var counter = safeCounter{counter: 0}
 
 type HydratorImpl struct {
 }
 
 type RunnerImpl struct {
-	Id int
+	ID int
 }
 
 func (r *RunnerImpl) Execute(ctx context.Context) error {
@@ -23,7 +47,7 @@ func (r *RunnerImpl) Execute(ctx context.Context) error {
 		return ctx.Err()
 	default:
 		time.Sleep(time.Duration(100) * time.Millisecond)
-		x++
+		counter.Inc()
 		return nil
 	}
 }
@@ -31,22 +55,21 @@ func (r *RunnerImpl) Execute(ctx context.Context) error {
 func (h *HydratorImpl) Get(ctx context.Context) ([]Runner, error) {
 	runners := make([]Runner, 0)
 
-	runners = append(runners, &RunnerImpl{Id: 1})
-	runners = append(runners, &RunnerImpl{Id: 2})
-	runners = append(runners, &RunnerImpl{Id: 3})
-	runners = append(runners, &RunnerImpl{Id: 4})
-	runners = append(runners, &RunnerImpl{Id: 5})
-	runners = append(runners, &RunnerImpl{Id: 6})
-	runners = append(runners, &RunnerImpl{Id: 7})
-	runners = append(runners, &RunnerImpl{Id: 8})
-	runners = append(runners, &RunnerImpl{Id: 9})
-	runners = append(runners, &RunnerImpl{Id: 10})
+	runners = append(runners, &RunnerImpl{ID: 1})
+	runners = append(runners, &RunnerImpl{ID: 2})
+	runners = append(runners, &RunnerImpl{ID: 3})
+	runners = append(runners, &RunnerImpl{ID: 4})
+	runners = append(runners, &RunnerImpl{ID: 5})
+	runners = append(runners, &RunnerImpl{ID: 6})
+	runners = append(runners, &RunnerImpl{ID: 7})
+	runners = append(runners, &RunnerImpl{ID: 8})
+	runners = append(runners, &RunnerImpl{ID: 9})
+	runners = append(runners, &RunnerImpl{ID: 10})
 
 	return runners, nil
 }
 
 func TestStartStop(t *testing.T) {
-	x = 0
 	h := &HydratorImpl{}
 
 	// Create a new executor
@@ -61,28 +84,36 @@ func TestStartStop(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	x = 0
+	counter.Reset()
 	h := &HydratorImpl{}
 
 	// Create a new executor
 	e := New(h, 1000, nil, 5)
-	e.runTasks(context.Background())
+	err := e.runTasks(context.Background())
 
-	if x != 10 {
-		t.Errorf("Expected x to be 10, got %d", x)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if counter.Count() != 10 {
+		t.Errorf("Expected x to be 10, got %d", counter.Count())
 	}
 }
 
 func TestRunConcurrent(t *testing.T) {
-	x = 0
+	counter.Reset()
 	h := &HydratorImpl{}
 
 	// Create a new executor
 	e := New(h, 1000, nil, 5)
-	e.runTasks(context.Background())
+	err := e.runTasks(context.Background())
 
-	if x != 10 {
-		t.Errorf("Expected x to be 10, got %d", x)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if counter.Count() != 10 {
+		t.Errorf("Expected x to be 10, got %d", counter.Count())
 	}
 }
 
@@ -104,7 +135,7 @@ func (h *BadHydratorImpl) Get(ctx context.Context) ([]Runner, error) {
 }
 
 func TestTaskWithError(t *testing.T) {
-	x = 0
+	counter.Reset()
 	h := &BadHydratorImpl{}
 
 	// Create a new executor
@@ -130,12 +161,13 @@ func (r *RunnerCancelledImpl) Execute(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
-		time.Sleep(time.Duration(500) * time.Millisecond)
-		x++
+		time.Sleep(time.Duration(100) * time.Millisecond)
 
-		if x == 5 {
+		if counter.Count() == 5 {
 			return fmt.Errorf("Error on 5th runner")
 		}
+
+		counter.Inc()
 
 		return nil
 	}
@@ -159,11 +191,11 @@ func (h *HydratorCancelledImpl) Get(ctx context.Context) ([]Runner, error) {
 }
 
 func TestTaskWithCancel(t *testing.T) {
-	x = 0
+	counter.Reset()
 	h := &HydratorCancelledImpl{}
 
 	// Create a new executor
-	e := New(h, 1000, nil, 5)
+	e := New(h, 1000, nil, 1)
 	e.ExitOnError = true
 	err := e.runTasks(context.Background())
 
@@ -171,7 +203,7 @@ func TestTaskWithCancel(t *testing.T) {
 		t.Errorf("Expected error")
 	}
 
-	if x == 5 {
-		t.Errorf("Expected to run 5 tasks before cancel, ran %d", x)
+	if counter.Count() != 5 {
+		t.Errorf("Expected to run 5 tasks before cancel, ran %d", counter.Count())
 	}
 }
